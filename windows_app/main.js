@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Menu } = require('electron');
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -13,8 +14,10 @@ function createWindow() {
     title: "Hospital EHR System"
   });
 
-  // Load the web app served by Nginx/Docker
-  win.loadURL('http://localhost');
+  // Priority: 1. ENV URL, 2. Deployed default, 3. Localhost
+  const startUrl = process.env.DESKTOP_URL || 'http://localhost';
+
+  win.loadURL(startUrl);
 
   // Remove default menu bar for a cleaner desktop app feel
   Menu.setApplicationMenu(null);
