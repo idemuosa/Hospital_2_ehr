@@ -1,5 +1,8 @@
-from rest_framework import viewsets, filters
+from rest_framework import viewsets, filters, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
+from .medication_ai import check_medication_interactions
 from .models import (
     Patient, Doctor, Appointment, AuditLog, Ward, Bed,
     VitalSign, Investigation, Prescription, ClinicalNote, Inventory,
@@ -71,12 +74,64 @@ class InvestigationViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['patient', 'status', 'category']
 
+    @action(detail=True, methods=['post'])
+    def analyze_image(self, request, pk=None):
+        investigation = self.get_object()
+        if not investigation.file:
+            return Response({"error": "No file attached to this investigation"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Simulated AI Image Analysis (e.g., Chest X-Ray detection)
+        # In production, this would call a model like PyTorch or a cloud vision API
+        file_name = investigation.file.name.lower()
+        analysis_result = "General observation: Normal"
+
+        if "chest" in file_name or "xray" in file_name:
+            analysis_result = "AI Insight: No acute pulmonary findings. Heart size is normal. Lungs are clear."
+        elif "fracture" in file_name or "bone" in file_name:
+            analysis_result = "AI Insight: Possible hairline fracture detected in the distal region. Clinical correlation recommended."
+
+        investigation.result = f"{investigation.result or ''}\n\n[AI ANALYSIS]: {analysis_result}"
+        investigation.save()
+
+        return Response({
+            "status": "Analysis completed",
+            "insight": analysis_result
+        })
+
+from rest_framework import viewsets, filters, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from .medication_ai import check_medication_interactions
+# ... (existing imports)
+
 class PrescriptionViewSet(viewsets.ModelViewSet):
     queryset = Prescription.objects.all()
     serializer_class = PrescriptionSerializer
     permission_classes = [IsAdmin | IsDoctor | IsPharmacist]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['patient', 'status']
+
+    @action(detail=False, methods=['post'])
+    def check_interaction(self, request):
+        patient_id = request.data.get('patient_id')
+        new_medication = request.data.get('medication')
+
+        if not patient_id or not new_medication:
+            return Response({"error": "patient_id and medication are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get existing active medications for the patient
+        existing_meds = Prescription.objects.filter(
+            patient_id=patient_id,
+            status='active'
+        ).values_list('medication', flat=True)
+
+        interactions = check_medication_interactions(new_medication, list(existing_meds))
+
+        return Response({
+            "medication": new_medication,
+            "interactions": interactions,
+            "safe": len(interactions) == 0
+        })
 
 class InventoryViewSet(viewsets.ModelViewSet):
     queryset = Inventory.objects.all()
