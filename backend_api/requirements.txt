@@ -21,3 +21,4 @@ uvicorn
 django-cloudinary-storage
 cloudinary
 django-cleanup
+whitenoise

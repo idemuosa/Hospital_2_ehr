@@ -11,7 +11,10 @@ export default function DashboardLayout() {
   useEffect(() => {
     // Connect to Django Channels WebSocket for notifications/real-time alerts
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const socket = new WebSocket(`${protocol}://${window.location.host}/ws/chat/alerts/`);
+    const apiHost = import.meta.env.VITE_API_URL
+      ? import.meta.env.VITE_API_URL.replace(/^https?:\/\//, '')
+      : window.location.host;
+    const socket = new WebSocket(`${protocol}://${apiHost}/ws/chat/alerts/`);
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
