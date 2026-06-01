@@ -23,6 +23,7 @@ from .pharmacy_views import DispenseMedicationView
 from .ward_views import WardMapView
 from .interoperability_views import FHIRPatientExportView, HL7PatientExportView
 from .sync_views import RemoteSyncView
+from .health_views import HealthCheckView
 
 router = DefaultRouter()
 router.register(r'patients', PatientViewSet)
@@ -48,6 +49,7 @@ urlpatterns = [
     path('interop/fhir/Patient/<uuid:pk>/', FHIRPatientExportView.as_view(), name='fhir-export'),
     path('interop/hl7/Patient/<uuid:pk>/', HL7PatientExportView.as_view(), name='hl7-export'),
     path('sync/remote/', RemoteSyncView.as_view(), name='remote-sync'),
+    path('health/', HealthCheckView.as_view(), name='health-check'),
     path('fhir/Patient/', FHIRPatientView.as_view(), name='fhir-patient-list'),
     path('fhir/Patient/<int:pk>/', FHIRPatientView.as_view(), name='fhir-patient-detail'),
     path('fhir/Observation/', FHIRObservationView.as_view(), name='fhir-observation-list'),
