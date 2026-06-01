@@ -1,0 +1,14 @@
+{
+  "name": "hospital-ehr-desktop",
+  "version": "1.0.0",
+  "description": "Windows Desktop Wrapper for Hospital EHR",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder build --win"
+  },
+  "devDependencies": {
+    "electron": "^29.3.0",
+    "electron-builder": "^24.13.3"
+  }
+}

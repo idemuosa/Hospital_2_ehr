@@ -1,0 +1,123 @@
+services:
+  db:
+    image: postgres:15
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=hospital_db
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d hospital_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  backend_api:
+    build: ./backend_api
+    command: >
+      sh -c "python manage.py makemigrations hospital &&
+             python manage.py migrate &&
+             python manage.py create_admin &&
+             python manage.py collectstatic --noinput &&
+             gunicorn hospital_project.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --timeout 120 --workers 2 --max-requests 500"
+    volumes:
+      - ./backend_api:/app
+      - ./backups:/app/backups
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  celery_worker:
+    image: my_hospital_ehr_v2-backend_api
+    command: celery -A hospital_project worker --loglevel=info
+    volumes:
+      - ./backend_api:/app
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  celery_beat:
+    image: my_hospital_ehr_v2-backend_api
+    command: celery -A hospital_project beat --loglevel=info
+    volumes:
+      - ./backend_api:/app
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # chat_service is replaced by django-channels in backend_api
+  # keeping it here but stopped or removed from nginx if needed
+
+  frontend:
+    build: ./frontend
+    command: npm run dev -- --host 0.0.0.0
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - app-network
+    depends_on:
+      - backend_api
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - static_volume:/app/staticfiles:ro
+      - media_volume:/app/media:ro
+    depends_on:
+      - backend_api
+      - frontend
+    networks:
+      - app-network
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  static_volume:
+  media_volume:
