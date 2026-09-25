@@ -98,12 +98,6 @@ class InvestigationViewSet(viewsets.ModelViewSet):
             "insight": analysis_result
         })
 
-from rest_framework import viewsets, filters, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from .medication_ai import check_medication_interactions
-# ... (existing imports)
-
 class PrescriptionViewSet(viewsets.ModelViewSet):
     queryset = Prescription.objects.all()
     serializer_class = PrescriptionSerializer
@@ -179,4 +173,9 @@ class BillViewSet(viewsets.ModelViewSet):
         bill.save()
         log_action(self.request.user, f"Automated billing for {patient.name}: Insurance covered {bill.insurance_covered_amount}", bill.id, "Bill")
 
-class BillItemViewSet(viewsets.M
+class BillItemViewSet(viewsets.ModelViewSet):
+    queryset = BillItem.objects.all()
+    serializer_class = BillItemSerializer
+    permission_classes = [IsAdmin | IsReceptionist]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['bill']
