@@ -1,4 +1,6 @@
 import os
+import socket
+import urllib.parse
 from pathlib import Path
 import environ
 
@@ -64,37 +66,76 @@ TEMPLATES = [
 WSGI_APPLICATION = 'hospital_project.wsgi.application'
 ASGI_APPLICATION = 'hospital_project.asgi.application'
 
-# Channels
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            "hosts": [env('REDIS_URL', default='redis://redis:6379/0')],
-        },
-    },
+# Check PostgreSQL DB connection availability and fall back to SQLite if absent
+default_db_url = f"sqlite:///{BASE_DIR / 'db.sqlite3'}"
+configured_db_url = env('DATABASE_URL', default=default_db_url)
+db_config = env.db_url_config(configured_db_url)
+
+if db_config['ENGINE'] == 'django.db.backends.postgresql':
+    try:
+        host = db_config.get('HOST') or 'localhost'
+        port = int(db_config.get('PORT') or 5432)
+        with socket.create_connection((host, port), timeout=1.0):
+            pass
+    except Exception:
+        db_config = {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+
+DATABASES = {
+    'default': db_config
 }
 
-# Celery
-CELERY_BROKER_URL = env('REDIS_URL', default='redis://redis:6379/0')
-CELERY_RESULT_BACKEND = env('REDIS_URL', default='redis://redis:6379/0')
+# Check Redis availability for channels, cache, and celery
+redis_url = env('REDIS_URL', default='redis://redis:6379/0')
+redis_available = False
+try:
+    parsed_redis = urllib.parse.urlparse(redis_url)
+    if parsed_redis.hostname:
+        with socket.create_connection((parsed_redis.hostname, parsed_redis.port or 6379), timeout=1.0):
+            redis_available = True
+except Exception:
+    redis_available = False
+
+if redis_available:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                "hosts": [redis_url],
+            },
+        },
+    }
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": redis_url,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            }
+        }
+    }
+    CELERY_BROKER_URL = redis_url
+    CELERY_RESULT_BACKEND = redis_url
+else:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        }
+    }
+    CELERY_BROKER_URL = 'memory://'
+    CELERY_RESULT_BACKEND = 'cache+locmem://'
+
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
-
-DATABASES = {
-    'default': env.db('DATABASE_URL', default='postgres://admin:password@db:5432/hospital_db')
-}
-
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": env('REDIS_URL', default='redis://redis:6379/0'),
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        }
-    }
-}
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
