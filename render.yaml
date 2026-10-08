@@ -8,6 +8,8 @@ services:
       pip install -r requirements.txt
       python manage.py collectstatic --noinput
       python manage.py migrate
+      python manage.py create_admin
+      python manage.py seed_data
     startCommand: |
       cd backend_api
       gunicorn hospital_project.asgi:application -k uvicorn.workers.UvicornWorker
@@ -26,7 +28,7 @@ services:
       - key: DEBUG
         value: false
       - key: ALLOWED_HOSTS
-        value: hospital-backend.onrender.com
+        value: hospital-backend.onrender.com,*.onrender.com
 
   # Celery Worker
   - type: worker
