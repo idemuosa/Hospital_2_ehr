@@ -72,10 +72,18 @@ configured_db_url = env('DATABASE_URL', default=default_db_url)
 db_config = env.db_url_config(configured_db_url)
 
 if db_config['ENGINE'] == 'django.db.backends.postgresql':
+    host = db_config.get('HOST') or 'localhost'
+    # If Render internal hostname is supplied outside of Render network, append public domain
+    if host.startswith('dpg-') and '.' not in host:
+        try:
+            socket.gethostbyname(host)
+        except Exception:
+            host = f"{host}.oregon-postgres.render.com"
+            db_config['HOST'] = host
+
+    port = int(db_config.get('PORT') or 5432)
     try:
-        host = db_config.get('HOST') or 'localhost'
-        port = int(db_config.get('PORT') or 5432)
-        with socket.create_connection((host, port), timeout=1.0):
+        with socket.create_connection((host, port), timeout=3.0):
             pass
     except Exception:
         db_config = {
